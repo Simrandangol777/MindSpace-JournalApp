@@ -1,0 +1,33 @@
+@inject IJSRuntime JS
+
+<div id="@EditorId" style="height: 420px;"></div>
+
+@code {
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    private string EditorId = $"quill_{Guid.NewGuid():N}";
+    private bool _initialized;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await JS.InvokeVoidAsync("quillInterop.create", EditorId);
+        await JS.InvokeVoidAsync("quillInterop.setHtml", EditorId, Value);
+        _initialized = true;
+    }
+
+    public async Task<string> GetHtmlAsync()
+    {
+        if (!_initialized) return Value;
+        return await JS.InvokeAsync<string>("quillInterop.getHtml", EditorId);
+    }
+
+    public async Task SetHtmlAsync(string html)
+    {
+        Value = html ?? "";
+        if (_initialized)
+            await JS.InvokeVoidAsync("quillInterop.setHtml", EditorId, Value);
+    }
+}

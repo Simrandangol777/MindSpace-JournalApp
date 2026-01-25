@@ -1,0 +1,68 @@
+@page "/pin-setup"
+@inject IAuthService AuthService
+@inject IPinLockService PinService
+@inject NavigationManager Nav
+
+<div class="auth-layout">
+    <div class="pin-card">
+        <h2 class="pin-title">Create 4-digit PIN</h2>
+        <p class="pin-subtitle">You’ll use this PIN every time you open MindSpace.</p>
+
+        @if (!string.IsNullOrWhiteSpace(msg))
+        {
+            <div class="pin-message @(ok ? "success" : "error")">@msg</div>
+        }
+
+        <input type="password" maxlength="4" inputmode="numeric"
+               class="pin-input"
+               placeholder="Enter PIN"
+               @bind="pin" />
+
+        <input type="password" maxlength="4" inputmode="numeric"
+               class="pin-input"
+               placeholder="Confirm PIN"
+               @bind="confirm" />
+
+        <button type="button" class="pin-btn pin-btn-primary" @onclick="SavePin">
+            Save PIN
+        </button>
+    </div>
+</div>
+
+@code {
+    private string pin = "";
+    private string confirm = "";
+    private string msg = "";
+    private bool ok;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthService.IsAuthenticated())
+        {
+            Nav.NavigateTo("/", true);
+            return;
+        }
+
+        var user = AuthService.GetCurrentUser();
+        if (user == null) { Nav.NavigateTo("/", true); return; }
+
+        if (await PinService.HasPinAsync(user.Id))
+            Nav.NavigateTo("/pin", true);
+    }
+
+    private async Task SavePin()
+    {
+        var user = AuthService.GetCurrentUser();
+        if (user == null) { Nav.NavigateTo("/", true); return; }
+
+        var (success, message) = await PinService.SetPinAsync(user.Id, pin, confirm);
+        ok = success;
+        msg = message;
+
+        if (success)
+        {
+            await PinService.LockAsync();
+            Nav.NavigateTo("/pin", true);
+        }
+    }
+}

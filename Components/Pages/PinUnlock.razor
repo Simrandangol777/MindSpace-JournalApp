@@ -1,0 +1,68 @@
+@page "/pin"
+@inject IAuthService AuthService
+@inject IPinLockService PinService
+@inject NavigationManager Nav
+
+<div class="auth-layout">
+    <div class="pin-card">
+        <h2 class="pin-title">Enter PIN</h2>
+        <p class="pin-subtitle">Unlock your journal.</p>
+
+        @if (!string.IsNullOrWhiteSpace(msg))
+        {
+            <div class="pin-message error">@msg</div>
+        }
+
+        <input type="password" maxlength="4" inputmode="numeric"
+               class="pin-input"
+               placeholder="4-digit PIN"
+               @bind="pin" />
+
+        <button type="button" class="pin-btn pin-btn-primary" @onclick="Unlock">
+            Unlock
+        </button>
+
+        <button type="button" class="pin-btn pin-btn-secondary" @onclick="Logout">
+            Log out
+        </button>
+    </div>
+</div>
+
+@code {
+    private string pin = "";
+    private string msg = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthService.IsAuthenticated())
+        {
+            Nav.NavigateTo("/", true);
+            return;
+        }
+
+        var user = AuthService.GetCurrentUser();
+        if (user == null) { Nav.NavigateTo("/", true); return; }
+
+        if (!await PinService.HasPinAsync(user.Id))
+            Nav.NavigateTo("/pin-setup", true);
+    }
+
+    private async Task Unlock()
+    {
+        var user = AuthService.GetCurrentUser();
+        if (user == null) { Nav.NavigateTo("/", true); return; }
+
+        var (success, message) = await PinService.UnlockAsync(user.Id, pin);
+        if (success)
+            Nav.NavigateTo("/editor", true);
+        else
+            msg = message;
+    }
+
+    private void Logout()
+    {
+        AuthService.Logout();
+        _ = PinService.LockAsync();
+        Nav.NavigateTo("/", true);
+    }
+}

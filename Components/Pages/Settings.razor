@@ -1,0 +1,253 @@
+@page "/settings"
+@inject IThemeService ThemeService
+@inject IExportService ExportService
+@inject IAuthService AuthService
+
+
+<div class="page-container">
+    <div class="page-header">
+        <h1 class="page-header-title">Settings</h1>
+        <p class="page-header-subtitle">Customize your journaling experience</p>
+    </div>
+
+    <div class="settings-card">
+        <h2 class="section-title">Appearance</h2>
+        <p class="section-subtitle">Themes</p>
+
+        <div class="theme-options">
+            <div class="theme-option">
+                <div class="theme-info">
+                    <h3 class="theme-name">Light Mode</h3>
+                    <p class="theme-description">Classic bright theme</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="radio"
+                           name="theme"
+                           value="light"
+                           checked="@(selectedTheme == "light")"
+                           @onchange="@(() => ChangeTheme("light"))" />
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <div class="theme-option">
+                <div class="theme-info">
+                    <h3 class="theme-name">Dark Mode</h3>
+                    <p class="theme-description">Easy on the eyes</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="radio"
+                           name="theme"
+                           value="dark"
+                           checked="@(selectedTheme == "dark")"
+                           @onchange="@(() => ChangeTheme("dark"))" />
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <div class="theme-option">
+                <div class="theme-info">
+                    <h3 class="theme-name">Custom Mode</h3>
+                    <p class="theme-description">Create your own</p>
+                </div>
+                <label class="toggle-switch active">
+                    <input type="radio"
+                           name="theme"
+                           value="custom"
+                           checked="@(selectedTheme == "custom")"
+                           @onchange="@(() => ChangeTheme("custom"))" />
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security Section -->
+    <div class="settings-card">
+        <h2 class="section-title">Security</h2>
+
+        <div class="security-header">
+            <div>
+                <h3 class="subsection-title">Change Password</h3>
+                <p class="subsection-description">Update your account password for enhanced security</p>
+            </div>
+        </div>
+
+        @if (showPasswordForm)
+        {
+            <div class="password-form">
+                <div class="form-group">
+                    <label class="form-label">Current Password</label>
+                    <input type="password"
+                           class="form-input"
+                           @bind="currentPassword"
+                           placeholder="Enter current password" />
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">New Password</label>
+                    <input type="password"
+                           class="form-input"
+                           @bind="newPassword"
+                           placeholder="Enter new password" />
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Confirm New Password</label>
+                    <input type="password"
+                           class="form-input"
+                           @bind="confirmPassword"
+                           placeholder="Confirm new password" />
+                </div>
+
+                <div class="form-actions">
+                    <button class="action-button secondary" @onclick="CancelPasswordChange">
+                        Cancel
+                    </button>
+                    <button class="action-button primary" @onclick="UpdatePassword">
+                        Update Password
+                    </button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <button class="change-password-button" @onclick="() => showPasswordForm = true">
+                Change Password
+            </button>
+        }
+    </div>
+
+    <div class="settings-card">
+        <h2 class="section-title">Export Data</h2>
+        <p class="section-description">Download your journal entries as a PDF document</p>
+
+        <div class="export-form">
+            <div class="date-range-inputs">
+                <div class="date-input-group">
+                    <label class="form-label">From Date</label>
+                    <input type="date"
+                           class="form-input"
+                           @bind="exportFromDate" />
+                </div>
+
+                <div class="date-input-group">
+                    <label class="form-label">To Date</label>
+                    <input type="date"
+                           class="form-input"
+                           @bind="exportToDate" />
+                </div>
+            </div>
+
+            <button class="export-button" @onclick="ExportAsPDF">
+                Export as PDF
+            </button>
+        </div>
+    </div>
+
+    @if (showSuccessMessage)
+    {
+        <div class="success-toast">
+            ✓ @(string.IsNullOrWhiteSpace(successMessageText) ? "Settings saved successfully!" : successMessageText)
+        </div>
+    }
+
+</div>
+
+@code {
+    private string selectedTheme = "custom";
+    private bool showPasswordForm = false;
+    private bool showSuccessMessage = false;
+
+    private string currentPassword = "";
+    private string newPassword = "";
+    private string confirmPassword = "";
+    private string successMessageText = "";
+
+
+    private DateTime? exportFromDate;
+    private DateTime? exportToDate;
+
+    private async Task ChangeTheme(string theme)
+    {
+        selectedTheme = theme;
+        await ThemeService.SetThemeAsync(theme);
+        await ShowSuccess();
+    }
+
+
+    private void CancelPasswordChange()
+    {
+        showPasswordForm = false;
+        currentPassword = "";
+        newPassword = "";
+        confirmPassword = "";
+    }
+
+    private async Task UpdatePassword()
+    {
+        if (string.IsNullOrWhiteSpace(currentPassword) ||
+            string.IsNullOrWhiteSpace(newPassword) ||
+            string.IsNullOrWhiteSpace(confirmPassword))
+        {
+            return;
+        }
+
+        if (newPassword != confirmPassword)
+        {
+            return;
+        }
+
+        var (success, message) = await AuthService.ChangePasswordAsync(currentPassword, newPassword);
+
+        if (success)
+        {
+            showPasswordForm = false;
+            currentPassword = "";
+            newPassword = "";
+            confirmPassword = "";
+            await ShowSuccess();
+        }
+        else
+        {
+            // optional: show message in UI (add error toast later)
+        }
+    }
+
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await ThemeService.InitializeAsync();
+        selectedTheme = ThemeService.CurrentTheme;
+    }
+
+
+    private async Task ExportAsPDF()
+    {
+        if (!exportFromDate.HasValue || !exportToDate.HasValue)
+            return;
+
+        var user = AuthService.GetCurrentUser();
+        if (user == null)
+            return;
+
+        var path = await ExportService.ExportEntriesToPdfAsync(user.Id, exportFromDate.Value, exportToDate.Value);
+
+        successMessageText = $"Exported PDF saved to: {path}";
+        await ShowSuccess();
+    }
+
+
+    private async Task ShowSuccess()
+    {
+        if (string.IsNullOrWhiteSpace(successMessageText))
+            successMessageText = "Settings saved successfully!";
+
+        showSuccessMessage = true;
+        StateHasChanged();
+        await Task.Delay(3000);
+        showSuccessMessage = false;
+        StateHasChanged();
+    }
+
+}

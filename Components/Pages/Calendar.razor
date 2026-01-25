@@ -1,0 +1,249 @@
+@page "/calendar"
+@inject IAuthService AuthService
+@inject IJournalService JournalService
+@inject NavigationManager Navigation
+
+<div class="page-container">
+    <div class="page-header">
+        <h1 class="page-header-title">Journal Calendar</h1>
+        <p class="page-header-subtitle">Track your journaling journey at a glance</p>
+    </div>
+
+    <div class="card calendar-card">
+        <!-- Calendar Header -->
+        <div class="calendar-nav">
+            <button class="nav-button" @onclick="PreviousMonth">
+                <svg width="24" height="24" viewBox="0 0 24 24">
+                    <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" fill="none"/>
+                </svg>
+            </button>
+
+            <div class="month-display">
+                <div class="month-name">@currentMonth.ToString("MMMM yyyy")</div>
+                <div class="entries-count">@entryCount entries this month</div>
+            </div>
+
+            <button class="nav-button" @onclick="NextMonth">
+                <svg width="24" height="24" viewBox="0 0 24 24">
+                    <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" fill="none"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Calendar Grid -->
+        <div class="calendar-grid">
+            <!-- Day Headers -->
+            @foreach (var day in dayNames)
+            {
+                <div class="day-header">@day</div>
+            }
+
+            <!-- Calendar Days -->
+            @foreach (var date in GetCalendarDays())
+            {
+                var hasEntry = HasEntry(date);
+
+                <div class="calendar-day @GetDayClass(date) @(hasEntry ? "clickable" : "disabled")"
+                     @onclick="() => SelectDate(date)">
+                    <span class="day-number">@date.Day</span>
+
+                    @if (hasEntry)
+                    {
+                        <div class="entry-indicator @GetMoodClass(date)"></div>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Mood Legend -->
+        <div class="mood-legend">
+            <div class="legend-item">
+                <span class="legend-dot positive"></span>
+                <span>Positive</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-dot neutral"></span>
+                <span>Neutral</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-dot negative"></span>
+                <span>Negative</span>
+            </div>
+        </div>
+    </div>
+
+    @if (selectedEntry != null)
+    {
+        <div class="card entry-preview-card">
+            <div class="preview-header">
+                <div>
+                    <h3 class="preview-title">@selectedEntry.Date.ToString("MMMM dd, yyyy")</h3>
+                    <p class="preview-subtitle">@selectedEntry.Title</p>
+                </div>
+                <div class="category-badge">@selectedEntry.Category</div>
+            </div>
+
+            <div class="preview-content">
+                <div class="preview-section">
+                    <h4 class="section-title">Primary Mood:</h4>
+                    <p class="section-text">@selectedEntry.PrimaryMood</p>
+                </div>
+
+                @if (selectedEntry.SecondaryMoods.Any())
+                {
+                    <div class="preview-section">
+                        <h4 class="section-title">Secondary Mood (if any):</h4>
+                        @foreach (var mood in selectedEntry.SecondaryMoods)
+                        {
+                            <p class="section-text">@mood</p>
+                        }
+                    </div>
+                }
+
+                <div class="preview-section">
+                    <h4 class="section-title">Tags:</h4>
+                    <div class="tags-container">
+                        @foreach (var tag in selectedEntry.Tags)
+                        {
+                            <span class="tag-chip">@tag</span>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="preview-actions">
+                <button class="action-button secondary" @onclick="ViewEntry">View Entry</button>
+                <button class="action-button primary" @onclick="EditEntry">Edit Entry</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private DateTime currentMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private JournalEntry? selectedEntry;
+    private int entryCount;
+
+    private string[] dayNames = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+
+    // Real entries from DB (for the month)
+    private List<JournalEntry> entries = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthService.IsAuthenticated())
+        {
+            Navigation.NavigateTo("/", true);
+            return;
+        }
+
+        await LoadMonthEntriesAsync();
+    }
+
+    private async Task LoadMonthEntriesAsync()
+    {
+        var user = AuthService.GetCurrentUser();
+        if (user == null)
+        {
+            Navigation.NavigateTo("/", true);
+            return;
+        }
+
+        // Load ALL entries (simple approach). Later we can optimize with month query.
+        var all = await JournalService.GetAllEntriesAsync(user.Id);
+
+        entries = all
+            .Where(e => e.Date.Year == currentMonth.Year && e.Date.Month == currentMonth.Month)
+            .ToList();
+
+        entryCount = entries.Count;
+
+        // If the selected entry is from another month, clear preview
+        if (selectedEntry != null &&
+            (selectedEntry.Date.Year != currentMonth.Year || selectedEntry.Date.Month != currentMonth.Month))
+        {
+            selectedEntry = null;
+        }
+
+        StateHasChanged();
+    }
+
+    private List<DateTime> GetCalendarDays()
+    {
+        var firstDay = new DateTime(currentMonth.Year, currentMonth.Month, 1);
+        var startDate = firstDay.AddDays(-(int)firstDay.DayOfWeek);
+
+        var days = new List<DateTime>(capacity: 42);
+        for (int i = 0; i < 42; i++)
+            days.Add(startDate.AddDays(i));
+
+        return days;
+    }
+
+    private string GetDayClass(DateTime date)
+    {
+        var classes = new List<string>();
+
+        if (date.Month != currentMonth.Month)
+            classes.Add("other-month");
+
+        if (date.Date == DateTime.Today)
+            classes.Add("today");
+
+        if (selectedEntry != null && date.Date == selectedEntry.Date.Date)
+            classes.Add("selected");
+
+        if (HasEntry(date))
+            classes.Add("has-entry");
+
+        return string.Join(" ", classes);
+    }
+
+    private bool HasEntry(DateTime date)
+        => entries.Any(e => e.Date.Date == date.Date);
+
+    private string GetMoodClass(DateTime date)
+    {
+        var entry = entries.FirstOrDefault(e => e.Date.Date == date.Date);
+        if (entry == null) return "";
+
+        // classify by mood name (same lists you used in DashboardService)
+        var positive = new HashSet<string> { "Happy", "Excited", "Relaxed", "Grateful", "Confident" };
+        var neutral  = new HashSet<string> { "Calm", "Thoughtful", "Curious", "Nostalgic", "Bored" };
+        var negative = new HashSet<string> { "Sad", "Angry", "Stressed", "Lonely", "Anxious" };
+
+        if (positive.Contains(entry.PrimaryMood)) return "positive";
+        if (neutral.Contains(entry.PrimaryMood)) return "neutral";
+        if (negative.Contains(entry.PrimaryMood)) return "negative";
+        return "";
+    }
+
+    private void SelectDate(DateTime date)
+    {
+        selectedEntry = entries.FirstOrDefault(e => e.Date.Date == date.Date);
+    }
+
+    private async Task PreviousMonth()
+    {
+        currentMonth = currentMonth.AddMonths(-1);
+        await LoadMonthEntriesAsync();
+    }
+
+    private async Task NextMonth()
+    {
+        currentMonth = currentMonth.AddMonths(1);
+        await LoadMonthEntriesAsync();
+    }
+
+    private void ViewEntry()
+    {
+        if (selectedEntry == null) return;
+        Navigation.NavigateTo($"/view/{selectedEntry.Id}");
+    }
+
+    private void EditEntry()
+    {
+        if (selectedEntry == null) return;
+        Navigation.NavigateTo($"/editor/{selectedEntry.Id}");
+    }
+}

@@ -1,0 +1,57 @@
+﻿@inherits LayoutComponentBase
+@inject IAuthService AuthService
+@inject IThemeService ThemeService
+@inject IPinLockService PinService
+@* @inject IAppLockState LockState *@
+@inject NavigationManager Navigation
+
+<div class="app-root @($"theme-{ThemeService.CurrentTheme}")">
+    @if (!AuthService.IsAuthenticated())
+    {
+    <!-- Auth layout -->
+    <div class="auth-layout">
+        @Body
+    </div>
+    }
+    else if (!PinService.IsUnlocked)
+    {
+    <!-- PIN layout (still not main app) -->
+    <div class="auth-layout">
+        @Body
+    </div>
+    }
+    else
+    {
+    <!-- Main app layout with navbar -->
+    <div class="app-container">
+        <NavBar />
+        <main class="main-content">
+            @Body
+        </main>
+    </div>
+    }
+</div>    
+
+@code {
+    private bool IsAuthenticated() => AuthService.IsAuthenticated();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+
+        ThemeService.OnThemeChanged += StateHasChanged;
+        await ThemeService.InitializeAsync();
+
+        PinService.OnLockStateChanged += StateHasChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+        => StateHasChanged();
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+        ThemeService.OnThemeChanged -= StateHasChanged;
+        PinService.OnLockStateChanged -= StateHasChanged;
+    }
+}

@@ -1,0 +1,744 @@
+@page "/editor"
+@page "/editor/{EntryId:int}"
+@using Mindspace.Components.Shared
+@inject IAuthService AuthService
+@inject IJournalService JournalService
+@inject NavigationManager Navigation
+
+<div class="editor-container">
+    <header class="editor-toolbar" role="banner">
+        <nav class="toolbar-nav" aria-label="Editor navigation">
+            <button type="button" class="toolbar-btn toolbar-btn-back" @onclick="GoBack" aria-label="Go back to entries">
+                <span class="toolbar-btn-icon" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                    </svg>
+                </span>
+                <span class="toolbar-btn-label">Back</span>
+            </button>
+        </nav>
+
+        <div class="toolbar-center">
+            <span class="toolbar-context">@(entry.Id > 0 ? "Edit Entry" : "New Entry")</span>
+            <div class="toolbar-date">
+                <svg class="toolbar-date-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                <span class="toolbar-date-display">@entryDate.ToString("MMMM d, yyyy")</span>
+                <input type="date"
+                       class="toolbar-date-input"
+                       @bind="entryDate"
+                       @bind:after="OnDateChanged"
+                       aria-label="Entry date" />
+            </div>
+        </div>
+
+        <div class="toolbar-actions">
+            <button type="button"
+                    class="toolbar-btn toolbar-btn-save"
+                    @onclick="HandleSaveClick"
+                    disabled="@isLoading"
+                    aria-label="@(isLoading ? "Saving" : "Save entry")">
+                <span class="toolbar-btn-icon" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                </span>
+                <span class="toolbar-btn-label">@(isLoading ? "Saving…" : "Save")</span>
+            </button>
+        </div>
+    </header>
+    
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="error-message">
+            @errorMessage
+        </div>
+    }
+
+    <!-- Main Content -->
+    <div class="editor-content">
+        <!-- Left Panel - Entry Details -->
+        <div class="details-panel">
+            <div class="detail-card">
+                <h3 class="card-title">Entry Details</h3>
+
+                <!-- Title Input -->
+                <div class="form-group">
+                    <label class="form-label">Title</label>
+                    <input type="text" 
+                           class="form-input title-input" 
+                           placeholder="Give your entry a title..."
+                           @bind="entry.Title" />
+                </div>
+
+                <!-- Category Selection -->
+                <div class="form-group">
+                    <label class="form-label">
+                        <svg width="16" height="16" viewBox="0 0 16 16" style="margin-right: 6px;">
+                            <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                        </svg>
+                        Category
+                    </label>
+                    <select class="form-select" @bind="entry.Category">
+                        <option value="">Select category...</option>
+                        @foreach (var category in categories)
+                        {
+                            <option value="@category">@category</option>
+                        }
+                    </select>
+                </div>
+
+                <!-- Mood Selection -->
+                <div class="form-group">
+                    <label class="form-label">
+                        <span class="mood-emoji">😊</span>
+                        Primary Mood (Required)
+                    </label>
+                    <div class="mood-grid">
+                        @foreach (var mood in moods)
+                        {
+                            <button class="mood-button @(entry.PrimaryMood == mood.Name ? "selected" : "")"
+                                    @onclick="() => SelectPrimaryMood(mood)">
+                                <span class="mood-emoji">@mood.Emoji</span>
+                                <span class="mood-name">@mood.Name</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        <span class="mood-emoji">😌</span>
+                        Secondary Moods (Optional - Max 2)
+                    </label>
+                    <div class="mood-grid">
+                        @foreach (var mood in moods)
+                        {
+                            <button class="mood-button small @(entry.SecondaryMoods.Contains(mood.Name) ? "selected" : "")"
+                                    @onclick="() => ToggleSecondaryMood(mood)"
+                                    disabled="@(!entry.SecondaryMoods.Contains(mood.Name) && entry.SecondaryMoods.Count >= 2)">
+                                <span class="mood-emoji-small">@mood.Emoji</span>
+                                <span class="mood-name-small">@mood.Name</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <!-- Tags -->
+                <div class="form-group">
+                    <label class="form-label">
+                        <svg width="16" height="16" viewBox="0 0 16 16" style="margin-right: 6px;">
+                            <path d="M2 3l5-2 7 7-5 5-7-7V3z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            <circle cx="5.5" cy="5.5" r="1" fill="currentColor"/>
+                        </svg>
+                        Tags
+                    </label>
+                    <div class="tags-input-container">
+                        <div class="selected-tags">
+                            @foreach (var tag in entry.Tags)
+                            {
+                                <span class="tag-chip">
+                                    @tag
+                                    <button class="tag-remove" @onclick="() => RemoveTag(tag)">×</button>
+                                </span>
+                            }
+                        </div>
+                        <div class="tag-input-wrapper">
+                            <input type="text" 
+                                   class="tag-input" 
+                                   placeholder="Add tag..."
+                                   @bind="newTag"
+                                   @onkeydown="HandleTagInput" />
+                            <button class="add-tag-button" @onclick="AddTag">+</button>
+                        </div>
+                    </div>
+
+                    <div class="predefined-tags">
+                        <p class="tags-label">Suggested tags:</p>
+                        <div class="tag-suggestions">
+                            @foreach (var tag in predefinedTags.Take(8))
+                            {
+                                <button class="tag-suggestion @(entry.Tags.Contains(tag) ? "added" : "")" 
+                                        @onclick="() => TogglePredefinedTag(tag)">
+                                    @tag
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel - Editor -->
+        <div class="editor-panel">
+            <div class="editor-card">
+                <!-- Text Editor -->
+                <div class="editor-wrapper">
+                    <RichTextEditor @ref="richEditor" Value="@entry.Content" ValueChanged="OnContentChanged" />
+                </div>
+
+                <!-- Save Button -->
+                <button type="button"
+                        class="editor-save-button"
+                        @onclick="HandleSaveClick"
+                        disabled="@isLoading"
+                        aria-label="@(isLoading ? "Saving" : "Save entry")">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                    @(isLoading ? "Saving…" : "Save Entry")
+                </button>
+
+                <!-- Footer Stats -->
+                <div class="editor-footer">
+                    <div class="stats">
+                        <span class="stat-item">
+                            <svg width="16" height="16" viewBox="0 0 16 16">
+                                <path d="M2 2h12v12H2z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <line x1="5" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1"/>
+                                <line x1="5" y1="9" x2="11" y2="9" stroke="currentColor" stroke-width="1"/>
+                            </svg>
+                            Words: @GetWordCount()
+                        </span>
+                        <span class="stat-item">
+                            <svg width="16" height="16" viewBox="0 0 16 16">
+                                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <path d="M8 4v4l3 2" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                            Created: @entry.CreatedAt.ToString("h:mm tt")
+                        </span>
+                        @if (entry.UpdatedAt > entry.CreatedAt)
+                        {
+                            <span class="stat-item">
+                                Updated: @entry.UpdatedAt.ToString("h:mm tt")
+                            </span>
+                        }
+                    </div>
+                    
+                    @if (!string.IsNullOrEmpty(entry.Content))
+                    {
+                        <button class="action-btn delete"
+                                @onclick="DeleteEntry"
+                                @onclick:stopPropagation="true">
+                                 <svg width="18" height="18" viewBox="0 0 18 18">
+                                <path d="M3 5h12M7 5V3h4v2M5 5v9a1 1 0 001 1h6a1 1 0 001-1V5M7 8v4M11 8v4" 
+                                      stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                            Delete Entry
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (showSaveNotification)
+{
+    <div class="save-notification">
+        ✓ Entry saved successfully!
+    </div>
+}
+
+@if (showDeleteConfirm)
+{
+    <div class="modal-overlay" @onclick="CancelDelete">
+        <div class="modal-dialog" @onclick:stopPropagation="true">
+            <h3 class="modal-title">Delete Entry?</h3>
+            <p class="modal-text">Are you sure you want to delete this entry? This action cannot be undone.</p>
+            <div class="modal-actions">
+                <button class="modal-button secondary" @onclick="CancelDelete">Cancel</button>
+                <button class="modal-button danger" @onclick="ConfirmDelete">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int? EntryId { get; set; }
+
+    private JournalEntry entry = new();
+    private DateTime entryDate = DateTime.Now;
+    private bool markdownMode = false;
+    private bool showSaveNotification = false;
+    private bool showDeleteConfirm = false;
+    private string newTag = "";
+    private string errorMessage = "";
+    private bool isLoading = false;
+    private RichTextEditor? richEditor;
+
+
+    private List<string> categories = new()
+    {
+        "Personal", "Work", "Health", "Relationships", "Travel", 
+        "Learning", "Creative", "Financial", "Spiritual"
+    };
+
+    private List<Mood> moods = MoodService.GetAllMoods();
+
+    private List<string> predefinedTags = new()
+    {
+        "Work", "Career", "Studies", "Family", "Friends", "Relationships",
+        "Health", "Fitness", "Personal Growth", "Self-care", "Hobbies",
+        "Travel", "Nature", "Finance", "Spirituality", "Birthday", "Holiday",
+        "Vacation", "Celebration", "Exercise", "Reading", "Writing", "Cooking",
+        "Meditation", "Yoga", "Music", "Shopping", "Parenting", "Projects",
+        "Planning", "Reflection"
+    };
+
+    private List<JournalEntry> entries = new();
+    
+    protected override async Task OnInitializedAsync()
+    {
+        // Check authentication
+        if (!AuthService.IsAuthenticated())
+        {
+            Navigation.NavigateTo("/", true);
+            return;
+        }
+
+        var user = AuthService.GetCurrentUser();
+        if (user == null) return;
+
+        // Load existing tags from database
+        await LoadExistingTags();
+
+        // If EntryId is provided (direct link), load that entry
+        if (EntryId.HasValue)
+        {
+            await LoadEntry(EntryId.Value);
+            return;
+        }
+
+        // Otherwise, check for entry by date (one entry per day)
+        entryDate = DateTime.Today;
+        await LoadEntryByDate();
+    }
+
+    private async Task LoadExistingTags()
+    {
+        try
+        {
+            var existingTags = await JournalService.GetAllTagsAsync();
+            // Merge existing tags with predefined tags, removing duplicates
+            var allTags = predefinedTags.Union(existingTags, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(t => t)
+                .ToList();
+            predefinedTags = allTags;
+        }
+        catch
+        {
+            // If loading fails, just use predefined tags
+        }
+    }
+
+    private async Task LoadEntry(int id)
+    {
+        var loadedEntry = await JournalService.GetEntryByIdAsync(id);
+        if (loadedEntry != null)
+        {
+            entry = loadedEntry;
+            entryDate = entry.Date;
+            
+            if (richEditor != null)
+                await richEditor.SetHtmlAsync(entry.Content);
+        }
+    }
+
+    private async Task LoadEntryByDate()
+    {
+        var user = AuthService.GetCurrentUser();
+        if (user == null) return;
+
+        var existingEntry = await JournalService.GetEntryByDateAsync(user.Id, entryDate);
+        
+        if (existingEntry != null)
+        {
+            // Load existing entry for this date
+            entry = existingEntry;
+            entryDate = entry.Date;
+            
+            if (richEditor != null)
+                await richEditor.SetHtmlAsync(entry.Content);
+        }
+        else
+        {
+            // No entry exists for this date, show blank form
+            entry = new JournalEntry()
+            {
+                UserId = user.Id,
+                Date = entryDate,
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now,
+                PrimaryMood = "",
+                SecondaryMoods = new(),
+                Tags = new(),
+                Content = "",
+                Title = ""
+            };
+            
+            if (richEditor != null)
+                await richEditor.SetHtmlAsync("");
+        }
+        
+        StateHasChanged();
+    }
+
+    private async Task OnDateChanged()
+    {
+        // When date changes, check if entry exists for new date
+        await LoadEntryByDate();
+    }
+
+    private void SelectPrimaryMood(Mood mood)
+    {
+        entry.PrimaryMood = mood.Name;
+    }
+
+    private void ToggleSecondaryMood(Mood mood)
+    {
+        if (entry.SecondaryMoods.Contains(mood.Name))
+        {
+            entry.SecondaryMoods.Remove(mood.Name);
+        }
+        else if (entry.SecondaryMoods.Count < 2)
+        {
+            entry.SecondaryMoods.Add(mood.Name);
+        }
+    }
+
+    private void HandleTagInput(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(newTag))
+        {
+            AddTag();
+        }
+    }
+
+    private void AddTag()
+    {
+        if (!string.IsNullOrWhiteSpace(newTag) && !entry.Tags.Contains(newTag))
+        {
+            entry.Tags.Add(newTag.Trim());
+            newTag = "";
+        }
+    }
+
+    private void RemoveTag(string tag)
+    {
+        entry.Tags.Remove(tag);
+    }
+
+    private void TogglePredefinedTag(string tag)
+    {
+        if (entry.Tags.Contains(tag))
+        {
+            entry.Tags.Remove(tag);
+        }
+        else
+        {
+            entry.Tags.Add(tag);
+        }
+    }
+
+    private void ApplyFormat(string format)
+    {
+        // TODO: Implement text formatting
+        // This would require JavaScript interop for rich text editing
+    }
+
+    private void ToggleMarkdownMode()
+    {
+        markdownMode = !markdownMode;
+    }
+
+    private string ConvertMarkdownToHtml(string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+            return "<p>Preview will appear here...</p>";
+
+        var html = markdown
+            .Replace("**", "<strong>")
+            .Replace("*", "<em>")
+            .Replace("\r\n", "<br/>")
+            .Replace("\n", "<br/>");
+
+        return html;
+    }
+    
+    private Task OnContentChanged(string html)
+    {
+        entry.Content = html ?? "";
+        return Task.CompletedTask;
+    }
+    
+    private int GetWordCount()
+    {
+        if (string.IsNullOrWhiteSpace(entry.Content))
+            return 0;
+
+        return entry.Content.Split(new[] { ' ', '\n', '\r', '\t' }, 
+            StringSplitOptions.RemoveEmptyEntries).Length;
+    }
+
+    private async Task HandleSaveClick()
+    {
+        await SaveEntry();
+        StateHasChanged();
+    }
+
+    private async Task SaveEntry()
+    {
+        isLoading = true;
+        errorMessage = "";
+        StateHasChanged();
+        
+        try
+        {
+            // Get content from editor if available
+            if (richEditor != null)
+            {
+                try
+                {
+                    entry.Content = await richEditor.GetHtmlAsync() ?? "";
+                }
+                catch
+                {
+                    // If editor isn't ready, use the current Value
+                    entry.Content = entry.Content ?? "";
+                }
+            }
+            
+            // Ensure UserId is set
+            var user = AuthService.GetCurrentUser();
+            if (user == null)
+            {
+                errorMessage = "User not authenticated. Please log in again.";
+                isLoading = false;
+                StateHasChanged();
+                return;
+            }
+            
+            if (entry.UserId <= 0)
+            {
+                entry.UserId = user.Id;
+            }
+            
+            // Always sync the date from the date picker
+            entry.Date = entryDate.Date;
+            
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(entry.Title))
+            {
+                errorMessage = "Title is required.";
+                isLoading = false;
+                StateHasChanged();
+                return;
+            }
+            
+            if (string.IsNullOrWhiteSpace(entry.PrimaryMood))
+            {
+                errorMessage = "Primary mood is required.";
+                isLoading = false;
+                StateHasChanged();
+                return;
+            }
+            
+            // Check if this is an update (entry has an ID) or a new entry
+            if (entry.Id > 0)
+            {
+                // Load the original entry to preserve CreatedAt
+                var originalEntry = await JournalService.GetEntryByIdAsync(entry.Id);
+                if (originalEntry == null)
+                {
+                    errorMessage = "Entry not found. It may have been deleted.";
+                    isLoading = false;
+                    StateHasChanged();
+                    return;
+                }
+                
+                // This is an update - check if date changed and if there's a conflict
+                var existingEntryForDate = await JournalService.GetEntryByDateAsync(user.Id, entryDate);
+                
+                // If there's an entry for this date and it's not the current entry, it's a conflict
+                if (existingEntryForDate != null && existingEntryForDate.Id != entry.Id)
+                {
+                    errorMessage = "An entry already exists for this date. Please choose a different date.";
+                    isLoading = false;
+                    StateHasChanged();
+                    return;
+                }
+                
+                // Update the existing entry, preserving original creation date
+                entry.CreatedAt = originalEntry.CreatedAt;
+                entry.UpdatedAt = DateTime.Now;
+                
+                var (success, message) = await JournalService.UpdateEntryAsync(entry);
+                if (success)
+                {
+                    errorMessage = "";
+                    await ShowSaveNotification();
+                    // Reload the entry to get updated data
+                    await LoadEntryByDate();
+                }
+                else
+                {
+                    errorMessage = message ?? "Failed to update entry. Please check your input.";
+                }
+            }
+            else
+            {
+                // This is a new entry - check if one already exists for this date
+                var existingEntry = await JournalService.GetEntryByDateAsync(user.Id, entryDate);
+                
+                if (existingEntry != null)
+                {
+                    // An entry already exists for this date - update it instead
+                    entry.Id = existingEntry.Id;
+                    entry.CreatedAt = existingEntry.CreatedAt; // Preserve original creation date
+                    entry.UpdatedAt = DateTime.Now;
+                    
+                    var (success, message) = await JournalService.UpdateEntryAsync(entry);
+                    if (success)
+                    {
+                        errorMessage = "";
+                        await ShowSaveNotification();
+                        // Reload the entry to get updated data
+                        await LoadEntryByDate();
+                    }
+                    else
+                    {
+                        errorMessage = message ?? "Failed to update entry. Please check your input.";
+                    }
+                }
+                else
+                {
+                    // No entry exists for this date - create new
+                    entry.Id = 0; // Ensure it's treated as new
+                    entry.CreatedAt = DateTime.Now;
+                    entry.UpdatedAt = DateTime.Now;
+                    
+                    var (success, message, createdEntry) = await JournalService.CreateEntryAsync(entry);
+                    if (success && createdEntry != null)
+                    {
+                        errorMessage = "";
+                        await ShowSaveNotification();
+                        // Reload to get the created entry with its ID
+                        await LoadEntryByDate();
+                    }
+                    else
+                    {
+                        errorMessage = message ?? "Failed to save entry. Please check your input.";
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearForm()
+    {
+        var user = AuthService.GetCurrentUser();
+        entry = new JournalEntry
+        {
+            UserId = user?.Id ?? 0,
+            Date = DateTime.Today,
+            CreatedAt = DateTime.Now,
+            UpdatedAt = DateTime.Now,
+            PrimaryMood = "",
+            SecondaryMoods = new List<string>(),
+            Tags = new List<string>(),
+            Content = "",
+            Title = ""
+        };
+        entryDate = DateTime.Today;
+        newTag = "";
+        errorMessage = "";
+        StateHasChanged();
+    }
+
+
+    private async Task ShowSaveNotification()
+    {
+        showSaveNotification = true;
+        StateHasChanged();
+        await Task.Delay(3000);
+        showSaveNotification = false;
+        StateHasChanged();
+    }
+    
+    private void DeleteEntry()
+    {
+        showDeleteConfirm = true;
+    }
+
+    private async Task DeleteEntry(int id)
+    {
+        if (entry.Id <= 0)
+        {
+            errorMessage = "No saved entry to delete.";
+            return;
+        }
+
+        var (success, message) = await JournalService.DeleteEntryAsync(entry.Id);
+
+        if (success)
+        {
+            Navigation.NavigateTo("/entries", true);
+        }
+        else
+        {
+            errorMessage = message;
+        }
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteConfirm = false;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (entry.Id <= 0)
+        {
+            showDeleteConfirm = false;
+            return;
+        }
+
+        var (success, message) = await JournalService.DeleteEntryAsync(entry.Id);
+        
+        showDeleteConfirm = false;
+            
+            if (success)
+            {
+                Navigation.NavigateTo("/entries", true);
+            }
+        else
+        {
+            errorMessage = message;
+            StateHasChanged();
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/entries");
+    }
+}

@@ -1,0 +1,316 @@
+@page "/view/{EntryId:int}"
+@inject IAuthService AuthService
+@inject IJournalService JournalService
+@inject NavigationManager Navigation
+
+<div class="view-container">
+    <!-- Header -->
+    <div class="view-header">
+        <div class="header-left">
+            <button class="back-button" @onclick="GoBack">
+                <svg width="24" height="24" viewBox="0 0 24 24">
+                    <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" fill="none"/>
+                </svg>
+                Back
+            </button>
+        </div>
+
+        <div class="header-center">
+            <div class="date-display">
+                <svg width="20" height="20" viewBox="0 0 20 20">
+                    <rect x="3" y="4" width="14" height="13" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                    <line x1="3" y1="8" x2="17" y2="8" stroke="currentColor" stroke-width="1.5"/>
+                    <line x1="7" y1="2" x2="7" y2="6" stroke="currentColor" stroke-width="1.5"/>
+                    <line x1="13" y1="2" x2="13" y2="6" stroke="currentColor" stroke-width="1.5"/>
+                </svg>
+                @entry.Date.ToString("MMMM dd, yyyy")
+            </div>
+        </div>
+
+        <div class="header-right">
+            <button class="edit-button" @onclick="EditEntry">
+                <svg width="20" height="20" viewBox="0 0 20 20">
+                    <path d="M14 2l4 4-10 10H4v-4L14 2z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                    <path d="M11 5l4 4" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                </svg>
+                Edit
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="view-content">
+        <!-- Entry Card -->
+        <div class="entry-card">
+            <!-- Title Section -->
+            <div class="title-section">
+                <h1 class="entry-title">@entry.Title</h1>
+                @if (!string.IsNullOrEmpty(entry.Category))
+                {
+                    <div class="category-badge">
+                        <svg width="16" height="16" viewBox="0 0 16 16" style="margin-right: 6px;">
+                            <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                        </svg>
+                        @entry.Category
+                    </div>
+                }
+            </div>
+
+            <!-- Metadata Section -->
+            <div class="metadata-section">
+                <div class="metadata-row">
+                    <div class="metadata-item">
+                        <svg width="18" height="18" viewBox="0 0 18 18">
+                            <circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            <path d="M9 5v4l3 2" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                        </svg>
+                        <span>Created: @entry.CreatedAt.ToString("MMMM dd, yyyy h:mm tt")</span>
+                    </div>
+                    @if (entry.UpdatedAt > entry.CreatedAt)
+                    {
+                        <div class="metadata-item">
+                            <svg width="18" height="18" viewBox="0 0 18 18">
+                                <circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <path d="M9 5v4l3 2" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            </svg>
+                            <span>Updated: @entry.UpdatedAt.ToString("MMMM dd, yyyy h:mm tt")</span>
+                        </div>
+                    }
+                    <div class="metadata-item">
+                        <svg width="18" height="18" viewBox="0 0 18 18">
+                            <path d="M2 2h14v14H2z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            <line x1="5" y1="6" x2="13" y2="6" stroke="currentColor" stroke-width="1"/>
+                            <line x1="5" y1="9" x2="13" y2="9" stroke="currentColor" stroke-width="1"/>
+                            <line x1="5" y1="12" x2="10" y2="12" stroke="currentColor" stroke-width="1"/>
+                        </svg>
+                        <span>@GetWordCount() words</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Divider -->
+            <div class="divider"></div>
+
+            <!-- Mood Section -->
+            <div class="mood-section">
+                <h3 class="section-heading">
+                    <span class="mood-emoji">😊</span>
+                    Mood
+                </h3>
+                <div class="mood-display">
+                    <div class="mood-primary">
+                        <span class="mood-label">Primary:</span>
+                        <div class="mood-chip primary">
+                            @GetMoodEmoji(entry.PrimaryMood)
+                            <span>@entry.PrimaryMood</span>
+                        </div>
+                    </div>
+                    @if (entry.SecondaryMoods.Any())
+                    {
+                        <div class="mood-secondary">
+                            <span class="mood-label">Secondary:</span>
+                            <div class="mood-chips">
+                                @foreach (var mood in entry.SecondaryMoods)
+                                {
+                                    <div class="mood-chip secondary">
+                                        @GetMoodEmoji(mood)
+                                        <span>@mood</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Tags Section -->
+            @if (entry.Tags.Any())
+            {
+                <div class="tags-section">
+                    <h3 class="section-heading">
+                        <svg width="18" height="18" viewBox="0 0 18 18" style="margin-right: 8px;">
+                            <path d="M2 3l5-2 9 9-5 5-9-9V3z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                            <circle cx="6" cy="6" r="1.5" fill="currentColor"/>
+                        </svg>
+                        Tags
+                    </h3>
+                    <div class="tags-display">
+                        @foreach (var tag in entry.Tags)
+                        {
+                            <span class="tag-chip">@tag</span>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Divider -->
+            <div class="divider"></div>
+
+            <!-- Content Section -->
+            <div class="content-section">
+                <div class="content-text">
+                    @((MarkupString)FormatContent(entry.Content))
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-section">
+            <button class="action-button secondary" @onclick="GoBack">
+                <svg width="20" height="20" viewBox="0 0 20 20">
+                    <path d="M15 10H5M10 5l-5 5 5 5" stroke="currentColor" stroke-width="2" fill="none"/>
+                </svg>
+                Back to List
+            </button>
+            <button class="action-button primary" @onclick="EditEntry">
+                <svg width="20" height="20" viewBox="0 0 20 20">
+                    <path d="M14 2l4 4-10 10H4v-4L14 2z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                    <path d="M11 5l4 4" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                </svg>
+                Edit Entry
+            </button>
+            <button class="action-button danger" @onclick="ShowDeleteConfirm">
+                <svg width="20" height="20" viewBox="0 0 20 20">
+                    <path d="M3 5h14M7 5V3h6v2M5 5v11a1 1 0 001 1h8a1 1 0 001-1V5M8 9v4M12 9v4" 
+                          stroke="currentColor" stroke-width="1.5" fill="none"/>
+                </svg>
+                Delete Entry
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteConfirm)
+{
+    <div class="modal-overlay" @onclick="CancelDelete">
+        <div class="modal-dialog" @onclick:stopPropagation="true">
+            <h3 class="modal-title">Delete Entry?</h3>
+            <p class="modal-text">Are you sure you want to delete this journal entry? This action cannot be undone.</p>
+            <div class="modal-actions">
+                <button class="modal-button secondary" @onclick="CancelDelete">Cancel</button>
+                <button class="modal-button danger" @onclick="ConfirmDelete">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int EntryId { get; set; }
+
+    private Mindspace.Models.JournalEntry entry = new();
+    private bool showDeleteConfirm = false;
+    private string errorMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthService.IsAuthenticated())
+        {
+            Navigation.NavigateTo("/", true);
+            return;
+        }
+
+        await LoadEntryAsync();
+    }
+
+    private async Task LoadEntryAsync()
+    {
+        var loaded = await JournalService.GetEntryByIdAsync(EntryId);
+        if (loaded == null)
+        {
+            // If entry deleted or invalid id → go back to list
+            Navigation.NavigateTo("/entries", true);
+            return;
+        }
+
+        entry = loaded;
+    }
+
+    private void EditEntry()
+    {
+        Navigation.NavigateTo($"/editor/{entry.Id}");
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/entries", true);
+    }
+
+    private void ShowDeleteConfirm()
+    {
+        showDeleteConfirm = true;
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteConfirm = false;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var (success, message) = await JournalService.DeleteEntryAsync(entry.Id);
+
+        if (success)
+        {
+            showDeleteConfirm = false;
+            Navigation.NavigateTo("/entries", true);
+        }
+        else
+        {
+            errorMessage = message;
+            showDeleteConfirm = false;
+        }
+    }
+    
+    private string GetMoodEmoji(string moodName)
+    {
+        return moodName switch
+        {
+            "Happy" => "😊",
+            "Excited" => "🤩",
+            "Relaxed" => "😌",
+            "Grateful" => "🙏",
+            "Confident" => "💪",
+            "Calm" => "😐",
+            "Thoughtful" => "🤔",
+            "Curious" => "🧐",
+            "Nostalgic" => "💭",
+            "Bored" => "😑",
+            "Sad" => "😢",
+            "Angry" => "😠",
+            "Stressed" => "😰",
+            "Lonely" => "😔",
+            "Anxious" => "😟",
+            _ => "😊"
+        };
+    }
+
+    private int GetWordCount()
+    {
+        if (string.IsNullOrWhiteSpace(entry.Content))
+            return 0;
+
+        return entry.Content.Split(new[] { ' ', '\n', '\r', '\t' },
+            StringSplitOptions.RemoveEmptyEntries).Length;
+    }
+
+    private string FormatContent(string content)
+    {
+        if (string.IsNullOrEmpty(content))
+            return "";
+
+        // simple markdown-ish rendering
+        content = System.Text.RegularExpressions.Regex.Replace(content, @"## (.+)", "<h2>$1</h2>");
+        content = System.Text.RegularExpressions.Regex.Replace(content, @"\*\*(.+?)\*\*", "<strong>$1</strong>");
+        content = System.Text.RegularExpressions.Regex.Replace(content, @"- (.+)", "<li>$1</li>");
+
+        content = content.Replace("\r\n\r\n", "</p><p>")
+            .Replace("\n\n", "</p><p>")
+            .Replace("\r\n", "<br/>")
+            .Replace("\n", "<br/>");
+
+        return $"<p>{content}</p>";
+    }
+
+}
