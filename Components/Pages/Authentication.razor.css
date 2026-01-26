@@ -34,7 +34,7 @@
 .auth-container {
     width: 100vw;
     height: 100vh;
-    background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%);
+    background: linear-gradient(135deg, #ffffff 0%, #f8bbd0 100%);
     display: flex;
     align-items: center;
     justify-content: center;

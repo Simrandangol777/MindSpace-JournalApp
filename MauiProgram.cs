@@ -27,13 +27,11 @@ public static class MauiProgram
         builder.Services.AddSingleton<IThemeService, ThemeService>();
         builder.Services.AddSingleton<IExportService, ExportService>();
         builder.Services.AddSingleton<IPinLockService, PinLockService>();
-        //builder.Services.AddSingleton<IAppLockState, AppLockState>();
         
         var app = builder.Build();
 
         var auth = app.Services.GetRequiredService<IAuthService>();
         var pin = app.Services.GetRequiredService<IPinLockService>();
-        //var lockState  = app.Services.GetRequiredService<IAppLockState>();
 
         Task.Run(async () =>
         {

@@ -44,21 +44,6 @@
                     <span class="toggle-slider"></span>
                 </label>
             </div>
-
-            <div class="theme-option">
-                <div class="theme-info">
-                    <h3 class="theme-name">Custom Mode</h3>
-                    <p class="theme-description">Create your own</p>
-                </div>
-                <label class="toggle-switch active">
-                    <input type="radio"
-                           name="theme"
-                           value="custom"
-                           checked="@(selectedTheme == "custom")"
-                           @onchange="@(() => ChangeTheme("custom"))" />
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
         </div>
     </div>
 
@@ -155,7 +140,7 @@
 </div>
 
 @code {
-    private string selectedTheme = "custom";
+    private string selectedTheme = "light";
     private bool showPasswordForm = false;
     private bool showSuccessMessage = false;
 

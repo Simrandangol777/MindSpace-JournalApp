@@ -4,10 +4,9 @@ using Mindspace.Services;
 using Mindspace.Models;
 
 namespace Mindspace.Data;
-public class AppDatabase
+public static class AppDatabase
 {
     private static SQLiteAsyncConnection? _database;
-
     private const string DatabaseName = "Mindspace.db";
 
     public static async Task<SQLiteAsyncConnection> GetDatabaseAsync()
@@ -41,8 +40,11 @@ public class AppDatabase
         {
             await db.ExecuteAsync("ALTER TABLE Users ADD COLUMN PinHash TEXT NULL");
         }
-        catch
+        catch (Exception ex)
         {
+#if DEBUG
+            Console.WriteLine("PinHash column already exists: " + ex.Message);
+#endif
         }
 
         await db.CreateTableAsync<CategoryEntity>();
