@@ -471,24 +471,44 @@ public class JournalService : IJournalService
 
     public async Task<(bool Success, string Message)> DeleteEntryAsync(int id)
     {
+        Console.WriteLine($"[SERVICE] DeleteEntryAsync called with ID: {id}");
+        
         var db = await DbAsync();
 
         var existing = await db.Table<JournalEntryEntity>()
             .Where(e => e.EntryID == id)
             .FirstOrDefaultAsync();
 
-        if (existing == null) return (false, "Entry not found.");
+        if (existing == null)
+        {
+            Console.WriteLine($"[SERVICE] Entry with ID {id} NOT FOUND in database");
+            return (false, "Entry not found.");
+        }
+        
+        Console.WriteLine($"[SERVICE] Found entry: ID={existing.EntryID}, Title='{existing.Title}'");
 
-        // Delete junctions first (safe even if FK not enforced)
-        var moods = await db.Table<EntryMoodEntity>().Where(x => x.EntryID == id).ToListAsync();
-        foreach (var m in moods) await db.DeleteAsync(m);
+        try
+        {
+            // Delete junctions first (safe even if FK not enforced)
+            var moods = await db.Table<EntryMoodEntity>().Where(x => x.EntryID == id).ToListAsync();
+            Console.WriteLine($"[SERVICE] Deleting {moods.Count} mood associations...");
+            foreach (var m in moods) await db.DeleteAsync(m);
+            var tags = await db.Table<EntryTagEntity>().Where(x => x.EntryID == id).ToListAsync();
+            Console.WriteLine($"[SERVICE] Deleting {tags.Count} tag associations...");
+            foreach (var t in tags) await db.DeleteAsync(t);
+            Console.WriteLine($"[SERVICE] Deleting main entry with ID {id}...");
+            await db.DeleteAsync(existing);
 
-        var tags = await db.Table<EntryTagEntity>().Where(x => x.EntryID == id).ToListAsync();
-        foreach (var t in tags) await db.DeleteAsync(t);
-
-        await db.DeleteAsync(existing);
-
-        return (true, "Entry deleted successfully.");
+            Console.WriteLine($"[SERVICE] Entry {id} deleted successfully!");
+            return (true, "Entry deleted successfully.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SERVICE] DELETE FAILED - Exception: {ex.GetType().Name}");
+            Console.WriteLine($"[SERVICE] Message: {ex.Message}");
+            Console.WriteLine($"[SERVICE] Stack: {ex.StackTrace}");
+            return (false, $"Delete failed: {ex.Message}");
+        }
     }
 
     public async Task<List<string>> GetAllTagsAsync()

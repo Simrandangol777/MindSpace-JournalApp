@@ -183,15 +183,22 @@
 <!-- Delete Confirmation Modal -->
 @if (showDeleteConfirm)
 {
-    <div class="modal-overlay" @onclick="CancelDelete">
+    <div class="modal-overlay"> @* @onclick="CancelDelete"> *@
         <div class="modal-dialog" @onclick:stopPropagation="true">
             <h3 class="modal-title">Delete Entry?</h3>
             <p class="modal-text">Are you sure you want to delete this journal entry? This action cannot be undone.</p>
             <div class="modal-actions">
-                <button class="modal-button secondary" @onclick="CancelDelete">Cancel</button>
-                <button class="modal-button danger" @onclick="ConfirmDelete">Delete</button>
+                <button class="modal-button secondary" @onclick="CancelDelete" @onclick:stopPropagation="true">Cancel</button>
+                <button type="button" class="modal-button danger" @onclick="ConfirmDelete" @onclick:stopPropagation="true">Delete</button>
             </div>
         </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div style="position:fixed;top:20px;right:20px;z-index:2000;background:#ffe6e6;color:#900;padding:10px 14px;border-radius:8px;max-width:420px;">
+        @errorMessage
     </div>
 }
 
@@ -239,16 +246,43 @@
 
     private void ShowDeleteConfirm()
     {
+        Console.WriteLine($"[VIEW DELETE] ShowDeleteConfirm clicked for entry.Id={entry.Id}");
+        showDeleteConfirm = true;
+        StateHasChanged();
+    }
+    
+    private void DeleteEntry()
+    {
         showDeleteConfirm = true;
     }
 
     private void CancelDelete()
     {
+        Console.WriteLine("[VIEW DELETE] CancelDelete clicked");
         showDeleteConfirm = false;
+        StateHasChanged();
     }
 
+    // private async Task ConfirmDelete()
+    // {
+    //     var (success, message) = await JournalService.DeleteEntryAsync(entry.Id);
+    //
+    //     if (success)
+    //     {
+    //         showDeleteConfirm = false;
+    //         Navigation.NavigateTo("/entries", true);
+    //     }
+    //     else
+    //     {
+    //         errorMessage = message;
+    //         showDeleteConfirm = false;
+    //     }
+    // }
     private async Task ConfirmDelete()
     {
+        Console.WriteLine($"[VIEW DELETE] ConfirmDelete clicked for entry.Id={entry.Id}");
+        StateHasChanged();
+        
         var (success, message) = await JournalService.DeleteEntryAsync(entry.Id);
 
         if (success)
@@ -261,7 +295,10 @@
             errorMessage = message;
             showDeleteConfirm = false;
         }
+        
+        StateHasChanged();
     }
+    
     
     private string GetMoodEmoji(string moodName)
     {

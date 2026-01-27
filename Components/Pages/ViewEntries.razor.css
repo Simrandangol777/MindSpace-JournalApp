@@ -373,6 +373,7 @@
     justify-content: center;
     z-index: 1000;
     animation: fadeIn 0.2s ease;
+    pointer-events: auto;
 }
 
 @keyframes fadeIn {
@@ -388,6 +389,9 @@
     width: 90%;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     animation: scaleIn 0.3s ease;
+    position: relative;
+    z-index: 1001;
+    pointer-events: auto;
 }
 
 @keyframes scaleIn {
@@ -419,6 +423,7 @@
     display: flex;
     gap: 15px;
     justify-content: flex-end;
+    pointer-events: auto;
 }
 
 .modal-button {
@@ -429,6 +434,7 @@
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
+    pointer-events: auto;
 }
 
 .modal-button.secondary {

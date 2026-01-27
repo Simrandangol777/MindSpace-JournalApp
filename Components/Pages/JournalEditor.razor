@@ -223,10 +223,10 @@
                         }
                     </div>
                     
-                    @if (!string.IsNullOrEmpty(entry.Content))
+                    @if (entry.Id > 0)
                     {
                         <button class="action-btn delete"
-                                @onclick="DeleteEntry"
+                                @onclick="ShowDeleteConfirm"
                                 @onclick:stopPropagation="true">
                                  <svg width="18" height="18" viewBox="0 0 18 18">
                                 <path d="M3 5h12M7 5V3h4v2M5 5v9a1 1 0 001 1h6a1 1 0 001-1V5M7 8v4M11 8v4" 
@@ -244,27 +244,50 @@
 @if (showSaveNotification)
 {
     <div class="save-notification">
-        ✓ Entry saved successfully!
+        Entry saved successfully!
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="error-notification" style="position:fixed;top:80px;right:20px;background:#ff4444;color:white;padding:16px 24px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:1000;max-width:400px;">
+        @errorMessage
     </div>
 }
 
 @if (showDeleteConfirm)
 {
-    <div class="modal-overlay" @onclick="CancelDelete">
+    <div class="modal-overlay"> 
         <div class="modal-dialog" @onclick:stopPropagation="true">
             <h3 class="modal-title">Delete Entry?</h3>
             <p class="modal-text">Are you sure you want to delete this entry? This action cannot be undone.</p>
+            
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div style="background:#ffe6e6;color:#c00;padding:12px;border-radius:6px;margin:12px 0;border-left:4px solid #c00;">
+                    <strong>Error:</strong> @errorMessage
+                </div>
+            }
+
             <div class="modal-actions">
-                <button class="modal-button secondary" @onclick="CancelDelete">Cancel</button>
-                <button class="modal-button danger" @onclick="ConfirmDelete">Delete</button>
+                <button type="button" class="modal-button secondary" @onclick="CancelDelete" @onclick:stopPropagation="true" disabled="@isDeleting">Cancel</button>
+                <button type="button" class="modal-button danger" @onclick="ConfirmDelete" @onclick:stopPropagation="true" disabled="@isDeleting">
+                    @if (isDeleting)
+                    {
+                        <span>Deleting...</span>
+                    }
+                    else
+                    {
+                        <span>Delete</span>
+                    }
+                </button>
             </div>
         </div>
     </div>
 }
 
 @code {
-    [Parameter]
-    public int? EntryId { get; set; }
+    [Parameter] public int? EntryId { get; set; }
 
     private JournalEntry entry = new();
     private DateTime entryDate = DateTime.Now;
@@ -274,12 +297,13 @@
     private string newTag = "";
     private string errorMessage = "";
     private bool isLoading = false;
+    private bool isDeleting = false;
     private RichTextEditor? richEditor;
 
 
     private List<string> categories = new()
     {
-        "Personal", "Work", "Health", "Relationships", "Travel", 
+        "Personal", "Work", "Health", "Relationships", "Travel",
         "Learning", "Creative", "Financial", "Spiritual"
     };
 
@@ -296,7 +320,7 @@
     };
 
     private List<JournalEntry> entries = new();
-    
+
     protected override async Task OnInitializedAsync()
     {
         // Check authentication
@@ -348,7 +372,7 @@
         {
             entry = loadedEntry;
             entryDate = entry.Date;
-            
+
             if (richEditor != null)
                 await richEditor.SetHtmlAsync(entry.Content);
         }
@@ -360,13 +384,13 @@
         if (user == null) return;
 
         var existingEntry = await JournalService.GetEntryByDateAsync(user.Id, entryDate);
-        
+
         if (existingEntry != null)
         {
             // Load existing entry for this date
             entry = existingEntry;
             entryDate = entry.Date;
-            
+
             if (richEditor != null)
                 await richEditor.SetHtmlAsync(entry.Content);
         }
@@ -385,11 +409,11 @@
                 Content = "",
                 Title = ""
             };
-            
+
             if (richEditor != null)
                 await richEditor.SetHtmlAsync("");
         }
-        
+
         StateHasChanged();
     }
 
@@ -474,19 +498,19 @@
 
         return html;
     }
-    
+
     private Task OnContentChanged(string html)
     {
         entry.Content = html ?? "";
         return Task.CompletedTask;
     }
-    
+
     private int GetWordCount()
     {
         if (string.IsNullOrWhiteSpace(entry.Content))
             return 0;
 
-        return entry.Content.Split(new[] { ' ', '\n', '\r', '\t' }, 
+        return entry.Content.Split(new[] { ' ', '\n', '\r', '\t' },
             StringSplitOptions.RemoveEmptyEntries).Length;
     }
 
@@ -501,7 +525,7 @@
         isLoading = true;
         errorMessage = "";
         StateHasChanged();
-        
+
         try
         {
             // Get content from editor if available
@@ -517,7 +541,7 @@
                     entry.Content = entry.Content ?? "";
                 }
             }
-            
+
             // Ensure UserId is set
             var user = AuthService.GetCurrentUser();
             if (user == null)
@@ -527,15 +551,15 @@
                 StateHasChanged();
                 return;
             }
-            
+
             if (entry.UserId <= 0)
             {
                 entry.UserId = user.Id;
             }
-            
+
             // Always sync the date from the date picker
             entry.Date = entryDate.Date;
-            
+
             // Validate required fields
             if (string.IsNullOrWhiteSpace(entry.Title))
             {
@@ -544,7 +568,7 @@
                 StateHasChanged();
                 return;
             }
-            
+
             if (string.IsNullOrWhiteSpace(entry.PrimaryMood))
             {
                 errorMessage = "Primary mood is required.";
@@ -552,7 +576,7 @@
                 StateHasChanged();
                 return;
             }
-            
+
             // Check if this is an update (entry has an ID) or a new entry
             if (entry.Id > 0)
             {
@@ -565,10 +589,10 @@
                     StateHasChanged();
                     return;
                 }
-                
+
                 // This is an update - check if date changed and if there's a conflict
                 var existingEntryForDate = await JournalService.GetEntryByDateAsync(user.Id, entryDate);
-                
+
                 // If there's an entry for this date and it's not the current entry, it's a conflict
                 if (existingEntryForDate != null && existingEntryForDate.Id != entry.Id)
                 {
@@ -577,11 +601,11 @@
                     StateHasChanged();
                     return;
                 }
-                
+
                 // Update the existing entry, preserving original creation date
                 entry.CreatedAt = originalEntry.CreatedAt;
                 entry.UpdatedAt = DateTime.Now;
-                
+
                 var (success, message) = await JournalService.UpdateEntryAsync(entry);
                 if (success)
                 {
@@ -599,14 +623,14 @@
             {
                 // This is a new entry - check if one already exists for this date
                 var existingEntry = await JournalService.GetEntryByDateAsync(user.Id, entryDate);
-                
+
                 if (existingEntry != null)
                 {
                     // An entry already exists for this date - update it instead
                     entry.Id = existingEntry.Id;
                     entry.CreatedAt = existingEntry.CreatedAt; // Preserve original creation date
                     entry.UpdatedAt = DateTime.Now;
-                    
+
                     var (success, message) = await JournalService.UpdateEntryAsync(entry);
                     if (success)
                     {
@@ -626,7 +650,7 @@
                     entry.Id = 0; // Ensure it's treated as new
                     entry.CreatedAt = DateTime.Now;
                     entry.UpdatedAt = DateTime.Now;
-                    
+
                     var (success, message, createdEntry) = await JournalService.CreateEntryAsync(entry);
                     if (success && createdEntry != null)
                     {
@@ -683,60 +707,142 @@
         showSaveNotification = false;
         StateHasChanged();
     }
-    
-    private void DeleteEntry()
-    {
-        showDeleteConfirm = true;
-    }
 
-    private async Task DeleteEntry(int id)
+    // private void DeleteEntry()
+    // {
+    //     showDeleteConfirm = true;
+    // }
+
+    // private async Task DeleteEntry(int id)
+    // {
+    //     if (entry.Id <= 0)
+    //     {
+    //         errorMessage = "No saved entry to delete.";
+    //         return;
+    //     }
+    //
+    //     var (success, message) = await JournalService.DeleteEntryAsync(entry.Id);
+    //
+    //     if (success)
+    //     {
+    //         Navigation.NavigateTo("/entries", true);
+    //     }
+    //     else
+    //     {
+    //         errorMessage = message;
+    //     }
+    // }
+
+    private async Task ShowDeleteConfirm()
     {
+        Console.WriteLine($"[DELETE] ShowDeleteConfirm called - Entry ID: {entry.Id}");
+
         if (entry.Id <= 0)
         {
-            errorMessage = "No saved entry to delete.";
+            Console.WriteLine($"[DELETE] BLOCKED - Entry ID is {entry.Id}, not saved yet");
+            errorMessage = "Cannot delete unsaved entry. Please save first.";
+            StateHasChanged();
             return;
         }
+        
+        Console.WriteLine($"[DELETE] Opening confirmation modal for Entry ID: {entry.Id}");
+        errorMessage = "";
+        showDeleteConfirm = true;
+        StateHasChanged();
 
-        var (success, message) = await JournalService.DeleteEntryAsync(entry.Id);
-
-        if (success)
-        {
-            Navigation.NavigateTo("/entries", true);
-        }
-        else
-        {
-            errorMessage = message;
-        }
+        // try
+        // {
+        //     var (success, message) = await JournalService.DeleteEntryAsync(entry.Id);
+        //     
+        //     Console.WriteLine($"[DELETE] Service returned success={success}, message={message}");
+        //
+        //     showDeleteConfirm = false;
+        //
+        //     if (success)
+        //     {
+        //         Navigation.NavigateTo("/entries", true);
+        //         return;
+        //     }
+        //
+        //     // show failure reason
+        //     errorMessage = message ?? "Failed to delete entry.";
+        //     StateHasChanged();
+        // }
+        // catch (Exception ex)
+        // {
+        //     showDeleteConfirm = false;
+        //     errorMessage = $"Delete error: {ex.Message}";
+        //     StateHasChanged();
+        // }
     }
-
+    
     private void CancelDelete()
     {
-        showDeleteConfirm = false;
-    }
-
-    private async Task ConfirmDelete()
-    {
-        if (entry.Id <= 0)
+        if (isDeleting)
         {
-            showDeleteConfirm = false;
+            Console.WriteLine("[DELETE] Cancel ignored (delete in progress)");
             return;
         }
 
-        var (success, message) = await JournalService.DeleteEntryAsync(entry.Id);
-        
+        Console.WriteLine("[DELETE] Delete cancelled by user");
         showDeleteConfirm = false;
-            
+        errorMessage = "";
+        StateHasChanged();
+    }
+    
+    private async Task ConfirmDelete()
+    {
+        Console.WriteLine($"[DELETE] ConfirmDelete called - Entry ID: {entry.Id}");
+        StateHasChanged();
+
+        if (entry.Id <= 0)
+        {
+            Console.WriteLine("[DELETE] ERROR - Entry ID is 0, cannot delete");
+            showDeleteConfirm = false;
+            errorMessage = "Cannot delete unsaved entry.";
+            StateHasChanged();
+            return;
+        }
+        isDeleting = true;
+        errorMessage = "";
+        StateHasChanged();
+        
+        Console.WriteLine($"[DELETE] Calling JournalService.DeleteEntryAsync({entry.Id})...");
+
+        try
+        {
+            var (success, message) = await JournalService.DeleteEntryAsync(entry.Id);
+
+            Console.WriteLine($"[DELETE] Service returned - Success: {success}, Message: {message}");
+
             if (success)
             {
+                Console.WriteLine("[DELETE] SUCCESS - Navigating to /entries");
+                showDeleteConfirm = false;
                 Navigation.NavigateTo("/entries", true);
             }
-        else
+            else
+            {
+                Console.WriteLine($"[DELETE] FAILED - {message}");
+                errorMessage = message ?? "Failed to delete entry.";
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
         {
-            errorMessage = message;
+            Console.WriteLine($"[DELETE] EXCEPTION - {ex.GetType().Name}: {ex.Message}");
+            Console.WriteLine($"[DELETE] Stack trace: {ex.StackTrace}");
+            errorMessage = $"Delete error: {ex.Message}";
             StateHasChanged();
         }
+        finally
+        {
+            isDeleting = false;
+            StateHasChanged();
+            Console.WriteLine("[DELETE] ConfirmDelete completed");
+        }
     }
-
+        
     private void GoBack()
     {
         Navigation.NavigateTo("/entries");

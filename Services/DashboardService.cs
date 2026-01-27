@@ -101,7 +101,8 @@ public class DashboardService : IDashboardService
 
             var dates = entries.Select(e => e.Date.Date).Distinct().ToList();
             var start = dates.Min();
-            var end = DateTime.Today;
+            // var end = DateTime.Today;
+            var end = dates.Max();
 
             var totalDays = (end - start).Days + 1;
             var missed = totalDays - dates.Count;

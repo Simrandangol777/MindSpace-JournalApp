@@ -161,6 +161,7 @@
                         <div class="entry-actions">
                             <button class="action-btn view" @onclick="() => ViewEntry(entry)">View</button>
                             <button class="action-btn edit" @onclick="() => EditEntry(entry)">Edit</button>
+                            @* <button class="action-btn danger" @onclick="() => PromptDeleteEntry(entry)">Delete</button> *@
                         </div>
                     </div>
                 </div>
@@ -413,6 +414,62 @@
     {
         Navigation.NavigateTo($"/editor/{entry.Id}");
     }
+    
+    // Deletion flow for list
+    private int? entryIdToDelete = null;
+    private bool showDeleteConfirmList = false;
+    private bool isDeletingList = false;
+    private string deleteErrorList = "";
+
+    private void PromptDeleteEntry(JournalEntry entry)
+    {
+        entryIdToDelete = entry.Id;
+        deleteErrorList = "";
+        showDeleteConfirmList = true;
+    }
+
+    private void CancelDeleteList()
+    {
+        entryIdToDelete = null;
+        showDeleteConfirmList = false;
+    }
+
+    private async Task ConfirmDeleteList()
+    {
+        if (!entryIdToDelete.HasValue) return;
+
+        isDeletingList = true;
+        deleteErrorList = "";
+        StateHasChanged();
+
+        try
+        {
+            var (success, message) = await JournalService.DeleteEntryAsync(entryIdToDelete.Value);
+            if (success)
+            {
+                // Remove locally and refresh filters
+                allEntries = allEntries.Where(e => e.Id != entryIdToDelete.Value).ToList();
+                ApplyFilters();
+                showDeleteConfirmList = false;
+                entryIdToDelete = null;
+            }
+            else
+            {
+                deleteErrorList = message ?? "Failed to delete entry.";
+                showDeleteConfirmList = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            deleteErrorList = ex.Message;
+            showDeleteConfirmList = true;
+        }
+        finally
+        {
+            isDeletingList = false;
+            StateHasChanged();
+        }
+    }
 
     private string GetExcerpt(string content)
     {
@@ -456,4 +513,21 @@
             _ => "😊"
         };
     }
+}
+@if (showDeleteConfirmList)
+{
+    <div class="modal-overlay">
+        <div class="modal-dialog" @onclick:stopPropagation="true">
+            <h3 class="modal-title">Delete Entry?</h3>
+            <p class="modal-text">Are you sure you want to delete this journal entry? This action cannot be undone.</p>
+            @if (!string.IsNullOrEmpty(deleteErrorList))
+            {
+                <div class="modal-error" style="color:#900;background:#ffe6e6;padding:8px;border-radius:6px;margin-bottom:8px;">@deleteErrorList</div>
+            }
+            <div class="modal-actions">
+                <button class="modal-button secondary" @onclick="CancelDeleteList" @onclick:stopPropagation="true" disabled="@isDeletingList">Cancel</button>
+                <button class="modal-button danger" @onclick="ConfirmDeleteList" @onclick:stopPropagation="true" disabled="@isDeletingList">@(isDeletingList ? "Deleting..." : "Delete")</button>
+            </div>
+        </div>
+    </div>
 }
