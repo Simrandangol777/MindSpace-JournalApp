@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Mindspace.Services;
+using QuestPDF.Infrastructure;
 
 namespace Mindspace;
 
@@ -8,11 +9,14 @@ public static class MauiProgram
     public static MauiApp CreateMauiApp()
     {
         var builder = MauiApp.CreateBuilder();
+        QuestPDF.Settings.License = LicenseType.Community;
+
         builder
             .UseMauiApp<App>()
             .ConfigureFonts(fonts =>
             {
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
+                // fonts.AddFont("OpenSans-SemiBold.ttf", "OpenSansSemibold");
             });
 
         builder.Services.AddMauiBlazorWebView();

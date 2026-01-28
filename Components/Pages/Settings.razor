@@ -124,7 +124,7 @@
                 </div>
             </div>
 
-            <button class="export-button" @onclick="ExportAsPDF">
+            <button class="btn btn-primary" @onclick="ExportAsPDF">
                 Export as PDF
             </button>
         </div>
@@ -133,7 +133,7 @@
     @if (showSuccessMessage)
     {
         <div class="success-toast">
-            ✓ @(string.IsNullOrWhiteSpace(successMessageText) ? "Settings saved successfully!" : successMessageText)
+            @(string.IsNullOrWhiteSpace(successMessageText) ? "Settings saved successfully!" : successMessageText)
         </div>
     }
 
@@ -209,17 +209,15 @@
 
     private async Task ExportAsPDF()
     {
-        if (!exportFromDate.HasValue || !exportToDate.HasValue)
-            return;
-
         var user = AuthService.GetCurrentUser();
         if (user == null)
             return;
 
-        var path = await ExportService.ExportEntriesToPdfAsync(user.Id, exportFromDate.Value, exportToDate.Value);
+        if (!exportFromDate.HasValue || !exportToDate.HasValue)
+            return;
 
-        successMessageText = $"Exported PDF saved to: {path}";
-        await ShowSuccess();
+        await ExportService.ExportEntriesToPdfAsync(user.Id, exportFromDate.Value, exportToDate.Value);
+
     }
 
 
